@@ -2,9 +2,7 @@ import re
 from django.utils import timezone
 from django.utils.timezone import datetime
 from hello.forms import LogChemicalForm
-from hello.forms import EditChemicalForm
 from hello.models import LogChemical
-
 from hello.models import QRCodeData, currentlyInStorageTable
 from django.views.generic import ListView
 from django.http import HttpResponse, JsonResponse
@@ -12,7 +10,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate
 from .forms import CustomLoginForm
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
 
 class ChemListView(ListView):
     """Renders the home page, with a list of all messages."""
@@ -21,20 +18,6 @@ class ChemListView(ListView):
     def get_context_data(self, **kwargs):
         context = super(ChemListView, self).get_context_data(**kwargs)
         return context
-		
-def edit_chemical(request, id):
-    chemical = get_object_or_404(currentlyInStorageTable, pk=id)
-    if request.method == 'POST':
-        # Use the EditChemicalForm to handle form submission
-        form = EditChemicalForm(request.POST, instance=chemical)
-        if form.is_valid():
-            form.save()  # Save the updated chemical data
-            messages.success(request, 'Chemical updated successfully!')  # Add a success message
-            return redirect('current_chemicals')  # Redirect back to the list view
-    else:
-        # Create the form with the existing chemical data pre-filled
-        form = EditChemicalForm(instance=chemical)
-    return render(request, 'edit_chemical.html', {'form': form, 'chemical': chemical})
     
 class HomeListView(ListView):
     """Renders the home page, with a list of all messages."""
@@ -106,6 +89,7 @@ def search_qr_code(request, qr_code):
     }
     return JsonResponse(response_data)
 
+
 def search_by_qr_code(request):
     chem_id = request.GET.get('chem_id')  # assuming the QR code scanner sends the ID as 'chem_id'
     try:
@@ -118,14 +102,4 @@ def search_by_qr_code(request):
         }
         return JsonResponse(data, status=200)
     except currentlyInStorageTable.DoesNotExist:
-        return JsonResponse({"error": "Chemical not found."}, status=404)   
-
-def searching(request):
-	#filter() returns row matching search value, need to pull input from user
-	#, right now just using bottleIDNUM for ease of integrating barcode scanner
-	searchData = currentlyInStorageTable.objects.filter(chemBottleIDNUM_exacts=1).values()
-	template = loader.get_template('template.html')
-	context = {
-		'currentlyInStorageTableSearch': searchData,
-	}
-	return HttpResponse(template.render(context, request))
+        return JsonResponse({"error": "Chemical not found."}, status=404)
