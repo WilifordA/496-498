@@ -2,14 +2,17 @@ import re
 from django.utils import timezone
 from django.utils.timezone import datetime
 from hello.forms import LogChemicalForm
+from hello.forms import EditChemicalForm
 from hello.models import LogChemical
-from hello.models import QRCodeData, currentlyInStorageTable
+from hello.models import LogChemical, QRCodeData, currentlyInStorageTable
 from django.views.generic import ListView
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate
 from .forms import CustomLoginForm
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.contrib import messages
 
 class ChemListView(ListView):
     """Renders the home page, with a list of all messages."""
@@ -18,7 +21,21 @@ class ChemListView(ListView):
     def get_context_data(self, **kwargs):
         context = super(ChemListView, self).get_context_data(**kwargs)
         return context
-    
+		
+def edit_chemical(request, id):
+    chemical = get_object_or_404(currentlyInStorageTable, pk=id)
+    if request.method == 'POST':
+        # Use the EditChemicalForm to handle form submission
+        form = EditChemicalForm(request.POST, instance=chemical)
+        if form.is_valid():
+            form.save()  # Save the updated chemical data
+            messages.success(request, 'Chemical updated successfully!')  # Add a success message
+            return redirect('current_chemicals')  # Redirect back to the list view
+    else:
+        # Create the form with the existing chemical data pre-filled
+        form = EditChemicalForm(instance=chemical)
+    return render(request, 'edit_chemical.html', {'form': form, 'chemical': chemical})
+
 class HomeListView(ListView):
     """Renders the home page, with a list of all messages."""
     model = LogChemical
@@ -103,3 +120,48 @@ def search_by_qr_code(request):
         return JsonResponse(data, status=200)
     except currentlyInStorageTable.DoesNotExist:
         return JsonResponse({"error": "Chemical not found."}, status=404)
+    else:
+        return JsonResponse({"error": "Invalid search input."}, status=400) 
+    
+def searching(request):
+	#filter() returns row matching search value, need to pull input from user
+	#, right now just using bottleIDNUM for ease of integrating barcode scanner
+	searchData = currentlyInStorageTable.objects.filter(chemBottleIDNUM_exacts=1).values()
+	template = loader.get_template('template.html')
+	context = {
+		'currentlyInStorageTableSearch': searchData,
+	}
+	return HttpResponse(template.render(context, request))
+
+# Basic Search Implementation
+def basic_search(request):
+    query = request.GET.get('query', '')  # Get the search term from the request
+    results = currentlyInStorageTable.objects.filter(
+        chemBottleIDNUM__icontains=query
+    ) | currentlyInStorageTable.objects.filter(
+        chemName__icontains=query
+    )  # Search by ID or name using icontains for partial matches
+    
+    return render(request, 'search_results.html', {'results': results, 'query': query})
+
+def search_page(request):
+    query = request.GET.get('query', '').strip()
+    results = []
+    message = None
+
+    if query:
+        results = currentlyInStorageTable.objects.filter(
+            chemName__icontains=query
+        ) | currentlyInStorageTable.objects.filter(
+            chemBottleIDNUM__icontains=query
+        )
+        if not results:
+            message = "No results found."
+    elif request.GET:
+        message = "Please enter a search term."
+
+    return render(request, 'search.html', {
+        'results': results,
+        'query': query,
+        'message': message
+    })
